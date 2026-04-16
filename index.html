@@ -324,7 +324,7 @@
           <label>Modelo<input class="input" id="apiModel" placeholder="gpt-oss:120b" /></label>
         </div>
         <div class="row">
-          <label>URL Ollama<input class="input" id="ollamaUrl" placeholder="https://ollama.com" /></label>
+          <label>URL Ollama / Proxy<input class="input" id="ollamaUrl" placeholder="https://tu-worker.workers.dev" /></label>
           <label>API key<input class="input" id="apiKey" placeholder="ollama_... / sk-..." /></label>
         </div>
         <div class="row">
@@ -332,7 +332,7 @@
           <label>Nombre del atleta<input class="input" id="athleteName" placeholder="Tu nombre" /></label>
         </div>
         <label class="toggle"><input type="checkbox" id="saveSensitive" /> Guardar la API key solo en este navegador</label>
-        <div class="footer-note">Para Ollama Cloud usa https://ollama.com y un modelo disponible en tu cuenta, por ejemplo gpt-oss:120b.</div>
+        <div class="footer-note">En GitHub Pages usa un proxy como Cloudflare Worker. Si llamas directo a https://ollama.com, el navegador puede bloquearlo por CORS.</div>
         <div class="row">
           <button class="btn primary" onclick="saveAISettings()">Guardar</button>
           <button class="btn ghost" onclick="clearAISettings()">Borrar</button>
@@ -894,8 +894,12 @@
     }
 
     function isAIReady(){
-      if((state.ai.provider || 'ollama_cloud') === 'ollama_cloud') return !!state.ai.ollamaUrl && !!state.ai.apiKey;
+      if((state.ai.provider || 'ollama_cloud') === 'ollama_cloud') return !!state.ai.ollamaUrl && (!isDirectOllamaUrl(state.ai.ollamaUrl) || !!state.ai.apiKey);
       return !!state.ai.apiKey;
+    }
+
+    function isDirectOllamaUrl(url){
+      try{ return new URL(url).hostname === 'ollama.com'; }catch{ return false; }
     }
 
     function buildCoachPrompt(text){
@@ -921,14 +925,16 @@
           userMessage
         ]
       };
+      const headers = { 'Content-Type':'application/json' };
+      if(state.ai.apiKey) headers.Authorization = `Bearer ${state.ai.apiKey}`;
       const res = await fetch(url, {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${state.ai.apiKey}` },
+        headers,
         body: JSON.stringify(body)
       });
       if(!res.ok){
         const txt = await res.text();
-        throw new Error(txt.slice(0,180) || 'Ollama Cloud no respondió. Revisa la API key, la URL y el modelo.');
+        throw new Error(txt.slice(0,180) || 'Ollama Cloud no respondió. Revisa la API key, el proxy y el modelo.');
       }
       const json = await res.json();
       return json?.message?.content?.trim() || 'Ollama respondió sin texto.';
